@@ -128,7 +128,7 @@ def inventory():
     
     inventory_url = (
         f'https://www.bungie.net/Platform/Destiny2/{membershipType}/Profile/'
-        f'{membershipId}/?components=102'
+        f'{membershipId}/?components=102,304,306'
     )
     response = requests.get(inventory_url, headers=headers)
     app.logger.info("Inventory endpoint status code: %s", response.status_code)
@@ -150,8 +150,12 @@ def inventory():
                                 .get("data", {}) \
                                 .get("items", [])
     app.logger.info("Found %d vault items.", len(vault_items))
-    
-    weapon_items = extract_weapons(vault_items)
+
+    # Extract instance-specific data:
+    stats_data = raw_inventory.get("Response", {}).get("itemStats", {}).get("data", {})
+    talent_grids_data = raw_inventory.get("Response", {}).get("itemTalentGrids", {}).get("data", {})
+
+    weapon_items = extract_weapons(vault_items, stats_data, talent_grids_data)
     app.logger.info("Total weapon items found: %d", len(weapon_items))
     
     return jsonify(weapon_items)
@@ -172,9 +176,10 @@ def inventory_ui():
         'Accept': 'application/json'
     }
     
+    # 102 = ProfileInventories, 304 = ItemStats, 306 = ItemTalentGrids, 302 = ItemPerks (if desired)
     inventory_url = (
         f'https://www.bungie.net/Platform/Destiny2/{membershipType}/Profile/'
-        f'{membershipId}/?components=102'
+        f'{membershipId}/?components=102,304,306,302'
     )
     response = requests.get(inventory_url, headers=headers)
     try:
@@ -185,28 +190,44 @@ def inventory_ui():
             "message": str(e)
         }), 500
 
-    # Extract vault items using the correct key ("profileInventory")
+    app.logger.info("Response keys: %s", list(raw_inventory.get("Response", {}).keys()))
+    
+    # Extract vault items using the correct path
     vault_items = raw_inventory.get("Response", {}) \
-                                 .get("profileInventory", {}) \
-                                 .get("data", {}) \
-                                 .get("items", [])
+                               .get("profileInventory", {}) \
+                               .get("data", {}) \
+                               .get("items", [])
+    app.logger.info("Found %d vault items.", len(vault_items))
     
-    # Use your weapon extraction function from weapons.py
-    weapon_items = extract_weapons(vault_items)
-    
+    # Extract instance-specific data from itemComponents
+    stats_data = raw_inventory.get("Response", {}) \
+                              .get("itemComponents", {}) \
+                              .get("stats", {}) \
+                              .get("data", {})
+    talent_grids_data = raw_inventory.get("Response", {}) \
+                                     .get("itemComponents", {}) \
+                                     .get("talentGrids", {}) \
+                                     .get("data", {})
+    perks_data = raw_inventory.get("Response", {}) \
+                              .get("itemComponents", {}) \
+                              .get("perks", {}) \
+                              .get("data", {})
+
+    from weapons import extract_weapons
+    # Call extract_weapons with vault items and the dynamic component data.
+    weapon_items = extract_weapons(vault_items, stats_data, talent_grids_data, perks_data)
     app.logger.info("Total weapon items found: %d", len(weapon_items))
     
-    # Group the weapons by type (using itemTypeDisplayName as the grouping key)
+    # Group and sort the weapons by type.
+    from collections import defaultdict
     grouped_weapons = defaultdict(list)
     for weapon in weapon_items:
         wtype = weapon.get("itemTypeDisplayName", "Other")
         grouped_weapons[wtype].append(weapon)
     
-    # Sort each group by weapon name
     for wtype in grouped_weapons:
         grouped_weapons[wtype] = sorted(grouped_weapons[wtype], key=lambda w: w.get("name", ""))
     
-    # Render a template (inventory.html) passing grouped_weapons
     return render_template("inventory.html", grouped_weapons=dict(grouped_weapons))
 
 
@@ -214,6 +235,14 @@ def inventory_ui():
 def logout():
     session.clear()  # Clears all session data
     return redirect(url_for('home'))
+
+
+@app.route('/debug_token')
+def debug_token():
+    token = session.get("token_data")
+    if token:
+        return jsonify(token)
+    return "No token found", 404
 
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
 DestinyInventoryItemDefinition.json
 DestinyItemCategoryDefinition.json
+*.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -35,6 +35,50 @@
             <li class="list-group-item weapon-item">
               <img src="https://www.bungie.net{{ weapon.icon }}" alt="{{ weapon.name }} Icon" class="weapon-icon">
               <strong>{{ weapon.name }}</strong> - ID: {{ weapon.itemInstanceId }}
+              <div class="instance-details">
+                <div><strong>Primary Stat:</strong> 
+                  {% if weapon.instanceStats and weapon.instanceStats.stats %}
+                    {# Assume primaryStat is contained in instanceStats – adjust as needed #}
+                    {% for stat in weapon.instanceStats.stats.values() %}
+                      {% if stat.statHash == weapon.instanceStats.primaryStatHash %}
+                        {{ stat.value }}
+                      {% endif %}
+                    {% endfor %}
+                  {% else %}N/A{% endif %}
+                </div>
+                <div><strong>Other Stats:</strong>
+                  {% if weapon.instanceStats and weapon.instanceStats.stats %}
+                  <ul>
+                    {% for stat in weapon.instanceStats.stats.values() %}
+                      <li>StatHash {{ stat.statHash }}: {{ stat.value }}</li>
+                    {% endfor %}
+                  </ul>
+                  {% else %}No stats available{% endif %}
+                </div>
+                <div><strong>Talent Grid:</strong>
+                  {% if weapon.instanceTalentGrid %}
+                    {{ weapon.instanceTalentGrid | tojson }}
+                  {% else %}
+                    N/A
+                  {% endif %}
+                </div>
+                <div><strong>Perks:</strong>
+                  {% if weapon.instancePerks and weapon.instancePerks.perks %}
+                  <ul>
+                    {% for perk in weapon.instancePerks.perks %}
+                      {% if perk.isActive and perk.visible %}
+                        <li>
+                          <img src="https://www.bungie.net{{ perk.iconPath }}" alt="perk icon" style="width:20px;"/>
+                          Perk {{ perk.perkHash }}
+                        </li>
+                      {% endif %}
+                    {% endfor %}
+                  </ul>
+                  {% else %}
+                    No perks available
+                  {% endif %}
+                </div>
+              </div>
             </li>
           {% endfor %}
         </ul>

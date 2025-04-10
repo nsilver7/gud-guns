@@ -6,23 +6,23 @@ with open("DestinyInventoryItemDefinition.json", "r") as f:
 
 # Define a set of weapon category hash values (adjust these as needed).
 weapon_category_hashes = {
-    5,        # Auto Rifle
-    6,        # Hand Cannon
-    7,        # Pulse Rifle
-    8,        # Scout Rifle
-    14,       # Sidearm
-    3954685534,  # Submachine Guns
-    3317538576,  # Combat Bows (Bows)
-    9,        # Fusion Rifle
-    3871742104,  # Glaives
-    11,       # Shotgun
-    10,       # Sniper Rifle
-    2489664120,  # Trace Rifle
-    13,       # Rocket Launcher
-    1504945536,  # Linear Fusion Rifle
-    54,       # Sword
-    153950757,   # Grenade Launcher
-    12        # Machine Gun
+    5,              # Auto Rifle
+    6,              # Hand Cannon
+    7,              # Pulse Rifle
+    8,              # Scout Rifle
+    14,             # Sidearm
+    3954685534,     # Submachine Guns
+    3317538576,     # Combat Bows (Bows)
+    9,              # Fusion Rifle
+    3871742104,     # Glaives
+    11,             # Shotgun
+    10,             # Sniper Rifle
+    2489664120,     # Trace Rifle
+    13,             # Rocket Launcher
+    1504945536,     # Linear Fusion Rifle
+    54,             # Sword
+    153950757,      # Grenade Launcher
+    12              # Machine Gun
 }
 
 def is_weapon(definition):
@@ -32,46 +32,48 @@ def is_weapon(definition):
 
 
 def enrich_item(vault_item):
-    """
-    Given a vault item (with minimal data from the API),
-    look up its definition via itemHash and merge the two.
-    """
+    """Enrich a vault item with static data from the manifest using itemHash."""
     item_hash = vault_item.get("itemHash")
     definition = item_definitions.get(str(item_hash))
-    # If there is no definition, return the original vault item.
     if not definition:
         return vault_item
 
-    # Prepare an enriched dictionary.
-    enriched = {}
-    # Copy instance-level data from the vault item.
-    enriched.update(vault_item)
-    # Merge in static data from the definition.
     display = definition.get("displayProperties", {})
+    enriched = {}
+    enriched.update(vault_item)
     enriched["name"] = display.get("name", "Unknown")
     enriched["description"] = display.get("description", "")
     enriched["icon"] = display.get("icon", "")
     enriched["itemTypeDisplayName"] = definition.get("itemTypeDisplayName", "Unknown")
     enriched["tierTypeName"] = definition.get("tierTypeName", "Unknown")
     enriched["itemCategoryHashes"] = definition.get("itemCategoryHashes", [])
-    # You could also add other relevant keys from the definition if needed.
     return enriched
 
 
-def extract_weapons(vault_items):
-    """
-    Filters the list of vault items (each with an itemHash) for weapons,
-    enriching each item using its manifest definition.
-    """
+def enrich_item_instance(vault_item, stats_data, talent_grids_data, perks_data):
+    """Merge instance-specific details using the itemInstanceId."""
+    enriched = enrich_item(vault_item)
+    instance_id = vault_item.get("itemInstanceId")
+    if instance_id:
+        enriched["instanceStats"] = stats_data.get(instance_id, {})
+        enriched["instanceTalentGrid"] = talent_grids_data.get(instance_id, {})
+        enriched["instancePerks"] = perks_data.get(instance_id, {})
+    else:
+        enriched["instanceStats"] = {}
+        enriched["instanceTalentGrid"] = {}
+        enriched["instancePerks"] = {}
+    return enriched
+
+
+def extract_weapons(vault_items, stats_data, talent_grids_data, perks_data):
     weapons = []
     for vault_item in vault_items:
-        enriched = enrich_item(vault_item)
-        # Check if the enriched definition qualifies as a weapon.
-        definition = item_definitions.get(str(vault_item.get("itemHash")))
+        item_hash = vault_item.get("itemHash")
+        definition = item_definitions.get(str(item_hash))
         if definition and is_weapon(definition):
+            enriched = enrich_item_instance(vault_item, stats_data, talent_grids_data, perks_data)
             weapons.append(enriched)
     return weapons
-
 
 
 """
