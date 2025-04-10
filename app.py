@@ -1,4 +1,5 @@
-from flask import Flask, redirect, request, session, url_for, jsonify
+from flask import Flask, redirect, request, session, url_for, jsonify, render_template
+from collections import defaultdict
 import requests
 import os
 import logging
@@ -154,6 +155,59 @@ def inventory():
     app.logger.info("Total weapon items found: %d", len(weapon_items))
     
     return jsonify(weapon_items)
+
+
+@app.route('/inventory_ui')
+def inventory_ui():
+    token_data = session.get('token_data')
+    if not token_data:
+        return redirect(url_for('home'))
+    
+    membershipType = '3'
+    membershipId = '4611686018540653658'
+
+    headers = {
+        'X-API-Key': app.config['API_KEY'],
+        'Authorization': f'Bearer {token_data.get("access_token")}',
+        'Accept': 'application/json'
+    }
+    
+    inventory_url = (
+        f'https://www.bungie.net/Platform/Destiny2/{membershipType}/Profile/'
+        f'{membershipId}/?components=102'
+    )
+    response = requests.get(inventory_url, headers=headers)
+    try:
+        raw_inventory = response.json()
+    except Exception as e:
+        return jsonify({
+            "error": "Failed to decode JSON from Bungie response",
+            "message": str(e)
+        }), 500
+
+    # Extract vault items using the correct key ("profileInventory")
+    vault_items = raw_inventory.get("Response", {}) \
+                                 .get("profileInventory", {}) \
+                                 .get("data", {}) \
+                                 .get("items", [])
+    
+    # Use your weapon extraction function from weapons.py
+    weapon_items = extract_weapons(vault_items)
+    
+    app.logger.info("Total weapon items found: %d", len(weapon_items))
+    
+    # Group the weapons by type (using itemTypeDisplayName as the grouping key)
+    grouped_weapons = defaultdict(list)
+    for weapon in weapon_items:
+        wtype = weapon.get("itemTypeDisplayName", "Other")
+        grouped_weapons[wtype].append(weapon)
+    
+    # Sort each group by weapon name
+    for wtype in grouped_weapons:
+        grouped_weapons[wtype] = sorted(grouped_weapons[wtype], key=lambda w: w.get("name", ""))
+    
+    # Render a template (inventory.html) passing grouped_weapons
+    return render_template("inventory.html", grouped_weapons=dict(grouped_weapons))
 
 
 @app.route('/logout')
